@@ -21,6 +21,7 @@ func example(command pools.Command) {
 	defer close(commandsChannel)
 
 	rl, jobsChannel := pools.MakeRateLimiter(10, 100, commandsChannel)
+	defer close(jobsChannel)
 
 	timer := func(command pools.Command) {
 		timer := time.NewTicker(time.Second * 2)
