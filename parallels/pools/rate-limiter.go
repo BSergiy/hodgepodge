@@ -97,16 +97,19 @@ func (limiter *RateLimiter) prepareState() {
 func (limiter *RateLimiter) checkChannels() (error, bool) {
 	select {
 	case command := <-limiter.command:
-		if command == StopAndJoin {
+		switch command {
+		case StopAndJoin:
 			limiter.safeClose()
-			log.Println("'Stop command' appears. Await all goroutins...")
+			log.Println("'StopAndJoin' command appears. Await all goroutins...")
 			limiter.awaiter.Wait()
 			log.Println("All goroutines stopped")
 			return nil, true
-		}
-		if command == StopAndDetach {
-			log.Println("'Stop command' appears. Shutdown without jobs awaiting")
+		case StopAndDetach:
+			log.Println("'StopAndDetach' command appears. Shutdown without jobs awaiting")
 			return nil, true
+		case ResetQueue:
+			log.Println("'ResetQueue' command appears.")
+			limiter.jobQueue = make([]func(), 0)
 		}
 	case <-limiter.ticker.C:
 		if limiter.bucket < limiter.jobsPerMin {
