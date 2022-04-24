@@ -13,29 +13,37 @@ import (
 /// TODO: improve worker and job identification mechanism
 
 type RateLimiter struct {
-	WorkersNumber int
-	JobsPerMin    int
-	Command       chan int
-
+	workersNumber       int
+	jobsPerMin          int
+	command             chan Command
 	awaiter             sync.WaitGroup
 	internalJobsChannel chan func()
 	safeClose           func()
 	bucket              int
 	ticker              *time.Ticker
-
-	jobQueueChannel chan []func()
-	jobQueue        []func()
-	nextJobIndex    int
+	jobQueueChannel     chan []func()
+	jobQueue            []func()
+	nextJobIndex        int
 }
 
-func (limiter *RateLimiter) MakeJobQueueChannel() (chan []func(), error) {
-	if limiter.jobQueueChannel != nil {
-		return nil, errors.New("job queue already created")
+func MakeRateLimiter(workersNumber int, jobsPerMin int,
+	command chan Command) (limiter *RateLimiter, jobQueueChannel chan []func()) {
+
+	limiter = &RateLimiter{
+		workersNumber: workersNumber,
+		jobsPerMin:    jobsPerMin,
+		command:       command,
 	}
 
+	jobQueueChannel = limiter.makeJobQueueChannel()
+
+	return
+}
+
+func (limiter *RateLimiter) makeJobQueueChannel() chan []func() {
 	limiter.jobQueueChannel = make(chan []func())
 
-	return limiter.jobQueueChannel, nil
+	return limiter.jobQueueChannel
 }
 
 func (limiter *RateLimiter) Run() error {
@@ -58,7 +66,7 @@ func (limiter *RateLimiter) Run() error {
 }
 
 func (limiter *RateLimiter) checkOnErrors() error {
-	if limiter.JobsPerMin <= 0 {
+	if limiter.jobsPerMin <= 0 {
 		return errors.New("'JobsPerMin' cannot be less than 1")
 	}
 	if limiter.jobQueueChannel == nil {
@@ -69,9 +77,9 @@ func (limiter *RateLimiter) checkOnErrors() error {
 }
 
 func (limiter *RateLimiter) prepareState() {
-	limiter.bucket = limiter.JobsPerMin
+	limiter.bucket = limiter.jobsPerMin
 
-	var f = 60 / float64(limiter.JobsPerMin)
+	var f = 60 / float64(limiter.jobsPerMin)
 
 	duration := time.Millisecond * time.Duration(f*1000)
 
@@ -88,7 +96,7 @@ func (limiter *RateLimiter) prepareState() {
 
 func (limiter *RateLimiter) checkChannels() (error, bool) {
 	select {
-	case command := <-limiter.Command:
+	case command := <-limiter.command:
 		if command == StopAndJoin {
 			limiter.safeClose()
 			log.Println("'Stop command' appears. Await all goroutins...")
@@ -101,7 +109,7 @@ func (limiter *RateLimiter) checkChannels() (error, bool) {
 			return nil, true
 		}
 	case <-limiter.ticker.C:
-		if limiter.bucket < limiter.JobsPerMin {
+		if limiter.bucket < limiter.jobsPerMin {
 			limiter.bucket++
 			log.Printf("Increase bucket size (%d)\n", limiter.bucket)
 		}
@@ -149,7 +157,7 @@ func (limiter *RateLimiter) addNewJobs(jobs []func()) {
 }
 
 func (limiter *RateLimiter) prepareWorkers() {
-	for i := 0; i < limiter.WorkersNumber; i++ {
+	for i := 0; i < limiter.workersNumber; i++ {
 		w := &worker{
 			JobsChanel: limiter.internalJobsChannel,
 		}

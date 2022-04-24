@@ -16,24 +16,13 @@ func ExampleWithJoinAllWorkers() {
 	example(pools.StopAndJoin)
 }
 
-func example(command int) {
-	stop := make(chan int)
+func example(command pools.Command) {
+	stop := make(chan pools.Command)
 	defer close(stop)
 
-	rl := pools.RateLimiter{
-		WorkersNumber: 10,
-		JobsPerMin:    100,
-		Command:       stop,
-	}
+	rl, jobsChannel := pools.MakeRateLimiter(10, 100, stop)
 
-	jobsChannel, err := rl.MakeJobQueueChannel()
-
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	timer := func(command int) {
+	timer := func(command pools.Command) {
 		timer := time.NewTicker(time.Second * 2)
 
 		<-timer.C

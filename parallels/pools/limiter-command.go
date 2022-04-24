@@ -1,6 +1,9 @@
 package pools
 
+type Command int
+
 const (
-	StopAndJoin   = iota
-	StopAndDetach = iota
+	StopAndJoin Command = iota
+	StopAndDetach
+	ResetQueue
 )
