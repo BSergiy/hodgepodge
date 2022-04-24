@@ -1,27 +1,26 @@
 package pools
 
 import (
-	"fmt"
+	"log"
 	"sync"
 	"time"
 )
 
-type Worker struct {
-	Ch  chan int
-	Job func()
+type worker struct {
+	JobsChanel chan func()
 }
 
-func (worker *Worker) Run(awaiter *sync.WaitGroup) {
+func (worker *worker) run(awaiter *sync.WaitGroup) {
 	awaiter.Add(1)
 	defer awaiter.Done()
 
-	for jobNumber := range worker.Ch {
-		fmt.Printf("Job #%d started...\n", jobNumber)
+	for job := range worker.JobsChanel {
+		log.Printf("Job started...\n")
 
 		started := time.Now()
-		worker.Job()
-		fmt.Printf("Job #%d finished (taked %v)\n", jobNumber, time.Since(started))
+		job()
+		log.Printf("Job finished (taked %v)\n", time.Since(started))
 	}
 
-	fmt.Println("--- worker was destructed")
+	log.Println("--- worker was destructed")
 }

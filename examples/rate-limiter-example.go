@@ -1,7 +1,8 @@
 package examples
 
 import (
-	"fmt"
+	"log"
+	"math/rand"
 	"time"
 
 	"github.com/BSergiy/hodgepodge/parallels/pools"
@@ -20,23 +21,49 @@ func example(command int) {
 	defer close(stop)
 
 	rl := pools.RateLimiter{
-		WorkersNumber: 15,
-		Rpm:           10,
+		WorkersNumber: 10,
+		JobsPerMin:    100,
 		Command:       stop,
 	}
 
-	timer := func(command int) {
-		stopTime := time.NewTicker(time.Second * 5)
+	jobsChannel, err := rl.MakeJobQueueChannel()
 
-		<-stopTime.C
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	timer := func(command int) {
+		timer := time.NewTicker(time.Second * 2)
+
+		<-timer.C
+
+		jobs := make([]func(), 0)
+
+		for i := 0; i < 10; i++ {
+			j := i
+			jobs = append(jobs, func() {
+				minDelay := 0
+				maxDelay := 1
+
+				time.Sleep(time.Duration(rand.Intn(maxDelay-minDelay)+minDelay) * time.Second)
+				log.Println("Job #", j)
+			})
+		}
+
+		jobsChannel <- jobs
+
+		timer.Reset(time.Second * 5)
+
+		<-timer.C
 		stop <- command
 
-		stopTime.Stop()
+		timer.Stop()
 	}
 
 	go timer(command)
 
 	if err := rl.Run(); err != nil {
-		fmt.Println(err)
+		log.Println(err)
 	}
 }
